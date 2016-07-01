@@ -1,4 +1,4 @@
-$rest = curl "https://gcmlp.service-now.com/api/now/table/u_usercreation?sysparm_fields=u_loc%2Cu_string_9%2Cu_string_4%2Cu_string_7%2Cu_string_6%2Cu_string_1%2Cu_integer_6%2Cu_choice_4%2Cu_boolean_3%2Cu_boolean_4%2Cu_boolean_1%2Cu_boolean_2%2Cu_boolean_5%2Cu_glide_date_1%2Cu_string_2&sysparm_limit=10&u_boolean_1=true" -Credential authuser@email.com
+$rest = curl "https://gcmlp.service-now.com/api/now/table/u_usercreation?sysparm_fields=sys_id%2Cu_loc%2Cu_string_9%2Cu_string_4%2Cu_string_7%2Cu_string_6%2Cu_string_1%2Cu_integer_6%2Cu_choice_4%2Cu_boolean_3%2Cu_boolean_4%2Cu_boolean_1%2Cu_boolean_2%2Cu_boolean_5%2Cu_glide_date_1%2Cu_string_2&sysparm_limit=1&u_boolean_1=true" -Credential mevans@gcmlp.com
 
 
 $converted = $rest.Content
@@ -8,16 +8,17 @@ $parsed = $rest.Content -split "," -split "{" -split '"'
 $handheld = $parsed[7]
 $deskphone = $parsed[17]
 $amex = $parsed[27]
-$curr = $parsed[32]
-$location = $parsed[37]
-$role = $parsed[42]
-$equipment = $parsed[47]
-$country = $parsed[52]
-$title = $parsed[57]
-$first = $parsed[62]
-$last = $parsed[67]
-$start = $parsed[72]
-$conid = $parsed[77]
+$sysid = $parsed[32]
+$curr = $parsed[37]
+$location = $parsed[42]
+$role = $parsed[47]
+$equipment = $parsed[52]
+$country = $parsed[57]
+$title = $parsed[62]
+$first = $parsed[67]
+$last = $parsed[72]
+$start = $parsed[77]
+$conid = $parsed[82]
 
+write-output Handheld Needed: $handheld Desk Phone: $deskphone AMEX: $amex Currency: $curr Location: $location Role: $role Equipment: $equipment Country: $country Title: $title Fire Name: $first Last Name: $last Start Date: $start Con ID: $conid SysID: $sysid
 
-write-output Handheld Needed: $handheld Desk Phone: $deskphone AMEX: $amex Currency: $curr Location: $location Role: $role Equipment: $equipment Country: $country Title: $title Fire Name: $first Last Name: $last Start Date: $start Con ID: $conid
