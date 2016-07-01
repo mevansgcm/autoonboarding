@@ -1,0 +1,153 @@
+$data = import-csv -path D:\Users\mevansa\Documents\groups.csv
+
+#$service =    #this will need to be a service account for O365 to make mailboxes
+
+$first = Read-Host -Prompt 'Enter first name'
+$last = Read-Host -Prompt 'Enter last name'
+$role = Read-Host -Prompt 'Employee role'
+#$manager = Read-Host -Prompt 'Employee manager'
+#$title = Read-Host -Prompt 'Employee title'
+#$startdate = Read-Host -Prompt 'Start date'
+#$mainoff = Read-Host -Prompt 'Main Office'
+#$altoff = Read-Host -Prompt 'Other offices'
+#$equip = Read-Host -Prompt 'Equipment needed'
+
+$account = $first.substring(0,1)+$last
+
+Do {
+
+	Try {
+			Get-ADUser $account | Out-Null
+			$account = $account + ++$i
+			Continue
+		}
+	Catch {
+		Break
+		}
+} While ($True)		
+
+New-ADUser -Name $account -ChangePasswordAtLogon $true
+
+$data | ForEach-Object {Add-ADGroupMember -Identity $_.$role -members $account}
+
+
+$session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential $service -Authentication Basic -AllowRedirection
+
+Import-PSSession $session
+
+Set-Mailbox -Identity $account@gcmlp.com -usedatabasequotadefaults $false
+Get-Mailbox -Identity $account@gcmlp.com | Set-Mailbox -IssueWarningQuota 23GB
+Get-Mailbox -Identity $account@gcmlp.com | Set-Mailbox -ProhibitSendQuota 25GB
+
+#enable-remotemailbox $account@gcmlp.com -archive #will most likely need an Exchange snapin to allow this to interface properly
+#start-onlinecoexistencesync
+
+Set-MsolUserLicense -UserPrincipalName "$account@gcmlp.com" -AddLicenses "gcmlp:ENTERPRISEPACK" #requires the online sercices sign-in and azure AD mod for powershell
+
+Get-PSSession | Remove-PSSession
+
+#Send-MailMessage -To support@westip.com -Subject 'Extension for new user.' -Body 'Please assign an extension for the user $account' -SmtpServer hybridmailrelay.gcmlp.com
+
+
+if ($location -eq "CHI") {
+ 
+$chicreds = Get-Credential -message "Please enter your Domain Administrator account info" 
+$chisession = new-pssession -Credential $chicreds -computername walton 
+
+
+# This block creates the folder on the remote share
+Invoke-Command -Session $chisession -ScriptBlock{param($account) $account = "$account"} -ArgumentList $account
+Invoke-Command -Session $chisession -ScriptBlock{$username = "GROSVENOR\$account"}
+Invoke-Command -Session $chisession -ScriptBlock{new-item "H:\Home\$user" -Type Directory}
+
+# This block changes the folder to a share and then assigns your user modify rights to it
+Invoke-Command -Session $chisession -ScriptBlock{$directory = Get-Item -Path "H:\Home\$account"}
+Invoke-Command -Session $chisession -ScriptBlock{$acl = Get-Acl "H:\Home\$account"}
+Invoke-Command -Session $chisession -ScriptBlock{(Get-WmiObject Win32_Share -List).Create("H:\Home\$account","$account$",0)}
+Invoke-Command -Session $chisession -ScriptBlock{$permissions = New-Object System.Security.AccessControl.FileSystemAccessRule($username,"Modify", "ContainerInherit, ObjectInherit", "None", "Allow")}
+Invoke-Command -Session $chisession -ScriptBlock{$acl.AddAccessRule($permissions)}
+Invoke-Command -Session $chisession -ScriptBlock{Set-Acl $directory $acl}
+
+# This block sets up a new security descriptor and then sets your user to it. It then applies it to your share you created
+# This will also overwrite the "Everyone" group that is assigned there.
+#AccessMasks: codes for reference
+#2032127 = Full Control
+#1245631 = Change
+#1179817 = Read
+
+Invoke-Command -Session $chisession -ScriptBlock{$sd = ([WMIClass] "Win32_SecurityDescriptor").CreateInstance()}
+#------------------------------------------------------------------------
+Invoke-Command -Session $chisession -ScriptBlock{$ACE = ([WMIClass] "Win32_ACE").CreateInstance()}
+Invoke-Command -Session $chisession -ScriptBlock{$Trustee = ([WMIClass] "Win32_Trustee").CreateInstance()}
+Invoke-Command -Session $chisession -ScriptBlock{$Trustee.Name = $account}#Assigns your user as a trustee
+Invoke-Command -Session $chisession -ScriptBlock{$Trustee.Domain = "GROSVENOR"}#sets the domain of your trustee
+Invoke-Command -Session $chisession -ScriptBlock{$ace.AccessMask = 2032127}#sets the access level of your trustee *see masks above
+Invoke-Command -Session $chisession -ScriptBlock{$ace.AceFlags = 3}
+Invoke-Command -Session $chisession -ScriptBlock{$ace.AceType = 0}
+Invoke-Command -Session $chisession -ScriptBlock{$ACE.Trustee = $Trustee}#assigns your trustee to the ACE array
+Invoke-Command -Session $chisession -ScriptBlock{$sd.DACL += $ACE.psObject.baseobject}# kicks the new ace back up to the Security descriptor
+#----------------------------------------------------------------------
+# note you can add more users and permissions to the share by copying the above block and changing the values to suit your needs
+
+Invoke-Command -Session $chisession -ScriptBlock{$mc = Get-WmiObject -Class Win32_Share -Filter "Path='H:\\Home\\$account'"}# This grabs your share folder that you created
+Invoke-Command -Session $chisession -ScriptBlock{$mc.SetShareInfo($Null, $Null, $sd)}# This line assigns your security Descriptor to the folder you created
+Get-PSSession | Remove-PSSession # This kills your remote session so no floating sessions are left open.
+
+
+$chiscancreds =
+$chiscansession = new-pssession -Credential $chiscancreds -computername mohawk
+
+Invoke-Command -Session $chiscansession -ScriptBlock{param($account) $account = "$account"} -ArgumentList $account 
+Invoke-Command -Session $chiscansession -ScriptBlock{$username = "GROSVENOR\$account"} 
+Invoke-Command -Session $chiscansession -ScriptBlock{new-item "E:\scanner\$account" -Type Directory} 
+Invoke-Command -Session $chiscansession -ScriptBlock{$directory = Get-Item -Path "E:\scanner\$account"} 
+Invoke-Command -Session $chiscansession -ScriptBlock{$acl = Get-Acl "E:\scanner\$account"} 
+Invoke-Command -Session $chiscansession -ScriptBlock{$permissions = New-Object System.Security.AccessControl.FileSystemAccessRule($username,“Modify”, “ContainerInherit, ObjectInherit”, “None”, “Allow”)} 
+Invoke-Command -Session $chiscansession -ScriptBlock{$acl.AddAccessRule($permissions)} 
+Invoke-Command -Session $chiscansession -ScriptBlock{Set-Acl $directory $acl} 
+Get-PSSession | Remove-PSSession 
+
+
+} else {
+
+$nycreds = Get-Credential -message "Please enter your Domain Administrator account info"
+$nysession = new-pssession -Credential $nycreds -computername ny-prvm-file01
+
+
+# This block creates the folder on the remote share
+Invoke-Command -Session $nysession -ScriptBlock{param($account) $account = "$account"} -ArgumentList $account
+Invoke-Command -Session $nysession -ScriptBlock{$username = "GROSVENOR\$account"}
+Invoke-Command -Session $nysession -ScriptBlock{new-item "D:\Home\$account" -Type Directory}
+
+# This block changes the folder to a share and then assigns your user modify rights to it
+Invoke-Command -Session $nysession -ScriptBlock{$directory = Get-Item -Path "D:\Home\$account"}
+Invoke-Command -Session $nysession -ScriptBlock{$acl = Get-Acl "D:\Home\$account"}
+Invoke-Command -Session $nysession -ScriptBlock{$permissions = New-Object System.Security.AccessControl.FileSystemAccessRule($username,"Modify", "ContainerInherit, ObjectInherit", "None", "Allow")}
+Invoke-Command -Session $nysession -ScriptBlock{$acl.AddAccessRule($permissions)}
+Invoke-Command -Session $nysession -ScriptBlock{Set-Acl $directory $acl}
+
+Get-PSSession | Remove-PSSession # This kills your remote session so no floating sessions are left open.
+
+
+$nyscancreds = Get-Credential -message "Please enter your domain account" 
+$nyscansession = new-pssession -Credential $nyscancreds -computername NY-PRVM-File01 
+
+Invoke-Command -Session $nyscansession -ScriptBlock{param($account) $account = "$account"} -ArgumentList $account 
+Invoke-Command -Session $nyscansession -ScriptBlock{$username = "GROSVENOR\$account"} 
+Invoke-Command -Session $nyscansession -ScriptBlock{new-item "D:\Scanner\$account" -Type Directory} 
+Invoke-Command -Session $nyscansession -ScriptBlock{$directory = Get-Item -Path "D:\Scanner\$account"} 
+Invoke-Command -Session $nyscansession -ScriptBlock{$acl = Get-Acl "D:\Scanner\$account"} 
+Invoke-Command -Session $nyscansession -ScriptBlock{$permissions = New-Object System.Security.AccessControl.FileSystemAccessRule($username,“Modify”, “ContainerInherit, ObjectInherit”, “None”, “Allow”)} 
+Invoke-Command -Session $nyscansession -ScriptBlock{$acl.AddAccessRule($permissions)} 
+Invoke-Command -Session $nyscansession -ScriptBlock{Set-Acl $directory $acl}
+
+Get-PSSession | Remove-PSSession 
+
+}
+
+
+
+
+
+
+
