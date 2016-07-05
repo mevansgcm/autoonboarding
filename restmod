@@ -1,9 +1,9 @@
-$rest = curl "https://gcmlp.service-now.com/api/now/table/u_usercreation?sysparm_fields=sys_id%2Cu_loc%2Cu_string_9%2Cu_string_4%2Cu_string_7%2Cu_string_6%2Cu_string_1%2Cu_integer_6%2Cu_choice_4%2Cu_boolean_3%2Cu_boolean_4%2Cu_boolean_1%2Cu_boolean_2%2Cu_boolean_5%2Cu_glide_date_1%2Cu_string_2&sysparm_limit=1&u_boolean_1=true" -Credential mevans@gcmlp.com
 
+$streetcred = Credential
+$rest = curl "https://gcmlp.service-now.com/api/now/table/u_usercreation?sysparm_fields=sys_id%2Cu_loc%2Cu_string_9%2Cu_string_4%2Cu_string_7%2Cu_string_6%2Cu_string_1%2Cu_integer_6%2Cu_choice_4%2Cu_boolean_3%2Cu_boolean_4%2Cu_boolean_1%2Cu_boolean_2%2Cu_boolean_5%2Cu_glide_date_1%2Cu_string_2&sysparm_limit=1&u_boolean_1=false" -Credential $streetcred
 
 $converted = $rest.Content
 $parsed = $rest.Content -split "," -split "{" -split '"'
-
 
 $handheld = $parsed[7]
 $deskphone = $parsed[17]
@@ -22,3 +22,4 @@ $conid = $parsed[82]
 
 write-output Handheld Needed: $handheld Desk Phone: $deskphone AMEX: $amex Currency: $curr Location: $location Role: $role Equipment: $equipment Country: $country Title: $title Fire Name: $first Last Name: $last Start Date: $start Con ID: $conid SysID: $sysid
 
+curl -Method Put -Uri "https://gcmlp.service-now.com/api/now/table/u_usercreation/$sysid" -Body "{'u_boolean_1':'true'}" -Credential $streetcred
